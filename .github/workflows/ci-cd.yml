@@ -1,38 +1,69 @@
-name: Build and Deploy .NET App to Azure
- 
+name: Build, Scan and Deploy .NET App to Azure
+
 on:
   push:
     branches: [ main ]
- 
+
 jobs:
   build-and-deploy:
     runs-on: windows-latest
- 
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
- 
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
- 
+
       - name: Restore dependencies
         run: dotnet restore
- 
+
       - name: Build
         run: dotnet build --configuration Release --no-restore
- 
+
       - name: Test
         run: dotnet test --no-build --verbosity normal
- 
+
+      # ---------------------------
+      # ✅ Basic Scanning with GitHub CodeQL
+      # ---------------------------
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      # ---------------------------
+      # ✅ Advanced Scanning with Trivy
+      # ---------------------------
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          ignore-unfixed: true
+          format: table
+          output: trivy-results.txt
+          severity: HIGH,CRITICAL
+
+      - name: Upload Trivy scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-report
+          path: trivy-results.txt
+
+      # ---------------------------
+      # ✅ Publish & Deploy
+      # ---------------------------
       - name: Publish
         run: dotnet publish -c Release -o ./publish
- 
+
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v3
         with:
           app-name: TestRS      # 🔹 change to your Azure App Service name
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: ./publish
- 
